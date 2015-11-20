@@ -24,6 +24,14 @@ class DTIReconInputSpec(CommandLineInputSpec):
     DWI = File(desc='Input diffusion volume', argstr='%s', exists=True, mandatory=True, position=1)
     out_prefix = traits.Str("dti", desc='Output file prefix', argstr='%s', usedefault=True, position=2)
     output_type = traits.Enum('nii', 'analyze', 'ni1', 'nii.gz', argstr='-ot %s', desc='output file type', usedefault=True)
+    gradient_matrix = File(desc="""specify gradient matrix to use. required.""", argstr='-gm %s', exists=True, mandatory=True, position=3)
+    multiple_b_values = traits.Bool(desc="""if 'MultiBvalue' is 'true' 
+          or 1, it will either use the bvalues specified as the 4th component 
+          of each gradient vector, or use max b value scaled by the magnitude
+          of the vector.""", argstr='%d', position=4)
+    b_value = traits.Int(desc="""set b value or maximum b value for multi-bvalue data. default is 1000""", argstr='-b %d')
+    number_of_b0 = traits.Int(desc="""number of repeated b0 images on top. default is 1. the program 
+          assumes b0 images are on top""", argstr='-b0 %d')
     bvecs = File(exists=True, desc='b vectors file',
                  argstr='-gm %s', mandatory=True)
     bvals = File(exists=True, desc='b values file', mandatory=True)
@@ -46,6 +54,7 @@ class DTIReconInputSpec(CommandLineInputSpec):
 class DTIReconOutputSpec(TraitedSpec):
     ADC = File(exists=True)
     B0 = File(exists=True)
+    DWI = File(exists=True)
     L1 = File(exists=True)
     L2 = File(exists=True)
     L3 = File(exists=True)
@@ -94,6 +103,7 @@ class DTIRecon(CommandLine):
         outputs = self.output_spec().get()
         outputs['ADC'] = os.path.abspath(fname_presuffix("", prefix=out_prefix, suffix='_adc.' + output_type))
         outputs['B0'] = os.path.abspath(fname_presuffix("", prefix=out_prefix, suffix='_b0.' + output_type))
+        outputs['DWI'] = os.path.abspath(fname_presuffix("",  prefix=out_prefix, suffix='_dwi.'+ output_type))
         outputs['L1'] = os.path.abspath(fname_presuffix("", prefix=out_prefix, suffix='_e1.' + output_type))
         outputs['L2'] = os.path.abspath(fname_presuffix("", prefix=out_prefix, suffix='_e2.' + output_type))
         outputs['L3'] = os.path.abspath(fname_presuffix("", prefix=out_prefix, suffix='_e3.' + output_type))
