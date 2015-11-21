@@ -40,12 +40,16 @@ if CMP_VERSION < 2:
 
 else:
     from nipype.interfaces.base import (BaseInterface, BaseInterfaceInputSpec, traits,
-                                        File, TraitedSpec, Directory, OutputMultiPath)
+                                        File, TraitedSpec, Directory, isdefined, OutputMultiPath)
+    from cmtklib.parcellation import (get_parcellation, create_annot_label, 
+                                     create_roi, create_wm_mask,
+                                     crop_and_move_datasets, generate_WM_and_GM_mask,
+                                     crop_and_move_WM_and_GM)
     iflogger = logging.getLogger('interface')
     try:
-            import scipy.ndimage.morphology as nd
-            except ImportError:
-                    raise Exception('Need scipy for binary erosion of white matter and CSF masks')
+        import scipy.ndimage.morphology as nd
+    except ImportError:
+        raise Exception('Need scipy for binary erosion of white matter and CSF masks')
 
 
 if CMP_VERSION < 2:
@@ -557,7 +561,7 @@ if CMP_VERSION < 2:
         dilated_roi_file_in_structural_space = File(
             desc='dilated ROI image resliced to the dimensions of the original structural image')
 
-else:
+else:   #cmp2.0+
     class ParcellateInputSpec(BaseInterfaceInputSpec):
         subjects_dir = Directory(desc='Freesurfer main directory')
         subject_id = traits.String(mandatory=True, desc='Subject ID')
@@ -584,6 +588,9 @@ else:
 class Parcellate(BaseInterface):
     """Subdivides segmented ROI file into smaller subregions
 
+    cmp 1.3
+    -------
+
     This interface implements the same procedure as in the ConnectomeMapper's
     parcellation stage (cmp/stages/parcellation/maskcreation.py) for a single
     parcellation scheme (e.g. 'scale500').
@@ -591,7 +598,6 @@ class Parcellate(BaseInterface):
     Example
     -------
 
-    cmp 1.3
     >>> import nipype.interfaces.cmtk as cmtk
     >>> parcellate = cmtk.Parcellate()
     >>> parcellate.inputs.freesurfer_dir = '.'
@@ -602,68 +608,107 @@ class Parcellate(BaseInterface):
     >>> parcellate.run()                 # doctest: +SKIP
 
     cmp 2.0+:
+    ---------
+
+    This interface interfaces with the ConnectomeMapper Toolkit library
+    parcellation functions (cmtklib/parcellation.py) for all
+    parcellation resolutions of a given scheme.
+
+    Example
+    _______
+
     >>> import nipype.interfaces.cmtk as cmtk
     >>> parcellate = cmtk.Parcellate()
     >>> parcellate.inputs.subjects_dir = '.'
     >>> parcellate.inputs.subject_id = 'subj1'
-    >>> parcellate.inputs.dilation = True
-    >>> parcellate.inputs.scale = 'scale500'
     >>> parcellate.run()                 # doctest: +SKIP
     """
 
     input_spec = ParcellateInputSpec
     output_spec = ParcellateOutputSpec
 
-    def _run_interface(self, runtime):
-        if self.inputs.subjects_dir:
-            os.environ.update({'SUBJECTS_DIR': self.inputs.subjects_dir})
+    if CMP_VERSION < 2:
+        def _run_interface(self, runtime):
+            if self.inputs.subjects_dir:
+                os.environ.update({'SUBJECTS_DIR': self.inputs.subjects_dir})
 
-        if not os.path.exists(op.join(self.inputs.subjects_dir, self.inputs.subject_id)):
-            raise Exception
-        iflogger.info("ROI_HR_th.nii.gz / fsmask_1mm.nii.gz CREATION")
-        iflogger.info("=============================================")
-        if CMP_VERSION < 2:
+            if not os.path.exists(op.join(self.inputs.subjects_dir, self.inputs.subject_id)):
+                raise Exception
+            iflogger.info("ROI_HR_th.nii.gz / fsmask_1mm.nii.gz CREATION")
+            iflogger.info("=============================================")
             create_annot_label(self.inputs.subject_id, self.inputs.subjects_dir, self.inputs.freesurfer_dir, self.inputs.parcellation_name)
             create_roi(self.inputs.subject_id, self.inputs.subjects_dir, self.inputs.freesurfer_dir, self.inputs.parcellation_name, self.inputs.dilation)
             create_wm_mask(self.inputs.subject_id, self.inputs.subjects_dir, self.inputs.freesurfer_dir, self.inputs.parcellation_name)
             crop_and_move_datasets(self.inputs.subject_id, self.inputs.subjects_dir, self.inputs.freesurfer_dir, self.inputs.parcellation_name, self.inputs.out_roi_file, self.inputs.dilation)
-        else:
-            create_annot_label(self.inputs.subject_id, self.inputs.subjects_dir)
-            create_roi(self.inputs.subject_id, self.inputs.subjects_dir)
-            create_wm_mask(self.inputs.subject_id, self.inputs.subjects_dir)
-            crop_and_move_datasets(self.inputs.subject_id, self.inputs.subjects_dir, self.inputs.scales)
 
-        return runtime
+            return runtime
+    else:   #cmp2.0+
+        def _run_interface(self, runtime):
+            #if self.inputs.subjects_dir:
+            #   os.environ.update({'SUBJECTS_DIR': self.inputs.subjects_dir})
+            iflogger.info("ROI_HR_th.nii.gz / fsmask_1mm.nii.gz CREATION")
+            iflogger.info("=============================================")
 
-    def _list_outputs(self):
-        outputs = self._outputs().get()
+            if self.inputs.parcellation_scheme == "Lausanne2008":
+                create_annot_label(self.inputs.subject_id, self.inputs.subjects_dir)
+                create_roi(self.inputs.subject_id, self.inputs.subjects_dir)
+                create_wm_mask(self.inputs.subject_id, self.inputs.subjects_dir)
+                if self.inputs.erode_masks:
+                    erode_mask(op.join(self.inputs.subjects_dir,self.inputs.subject_id,'mri','fsmask_1mm.nii.gz'))
+                    erode_mask(op.join(self.inputs.subjects_dir,self.inputs.subject_id,'mri','csf_mask.nii.gz'))
+                    erode_mask(op.join(self.inputs.subjects_dir,self.inputs.subject_id,'mri','brainmask.nii.gz'))
+                crop_and_move_datasets(self.inputs.subject_id, self.inputs.subjects_dir)
+            if self.inputs.parcellation_scheme == "NativeFreesurfer":
+                generate_WM_and_GM_mask(self.inputs.subject_id, self.inputs.subjects_dir)
+                if self.inputs.erode_masks:
+                    erode_mask(op.join(self.inputs.subjects_dir,self.inputs.subject_id,'mri','fsmask_1mm.nii.gz'))
+                    erode_mask(op.join(self.inputs.subjects_dir,self.inputs.subject_id,'mri','csf_mask.nii.gz'))
+                    erode_mask(op.join(self.inputs.subjects_dir,self.inputs.subject_id,'mri','brainmask.nii.gz'))
+                crop_and_move_WM_and_GM(self.inputs.subject_id, self.inputs.subjects_dir)
 
-        if CMP_VERSION < 2:
+            return runtime
+
+    if CMP_VERSION < 2:
+        def _list_outputs(self):
+            outputs = self._outputs().get()
+
             if isdefined(self.inputs.out_roi_file):
                 outputs['roi_file'] = op.abspath(self.inputs.out_roi_file)
             else:
                 outputs['roi_file'] = op.abspath(
                     self._gen_outfilename('nii.gz', 'ROI'))
-        else:
-            outputs['roi_files'] = self._gen_outfilenames('ROI_HR_th.nii.gz')
-
-        if self.inputs.dilation is True:
-            outputs['roiv_file'] = op.abspath(self._gen_outfilename(
-                'nii.gz', 'ROIv'))
-        outputs['white_matter_mask_file'] = op.abspath('fsmask_1mm.nii.gz')
-        outputs['cc_unknown_file'] = op.abspath('cc_unknown.nii.gz')
-        outputs['ribbon_file'] = op.abspath('ribbon.nii.gz')
-        outputs['aseg_file'] = op.abspath('aseg.nii.gz')
-
-        if CMP_VERSION < 2:
+            if self.inputs.dilation is True:
+                outputs['roiv_file'] = op.abspath(self._gen_outfilename(
+                    'nii.gz', 'ROIv'))
+            outputs['white_matter_mask_file'] = op.abspath('fsmask_1mm.nii.gz')
+            outputs['cc_unknown_file'] = op.abspath('cc_unknown.nii.gz')
+            outputs['ribbon_file'] = op.abspath('ribbon.nii.gz')
+            outputs['aseg_file'] = op.abspath('aseg.nii.gz')
             outputs['roi_file_in_structural_space'] = op.abspath('ROI_HR_th.nii.gz')
-        else:
-            outputs['roi_files_in_structural_space'] = self._gen_outfilenames('ROIv_HR_th.nii.gz')
 
-        if self.inputs.dilation is True:
-            outputs['dilated_roi_file_in_structural_space'] = op.abspath(
-                'ROIv_HR_th.nii.gz')
-        return outputs
+            if self.inputs.dilation is True:
+                outputs['dilated_roi_file_in_structural_space'] = op.abspath(
+                    'ROIv_HR_th.nii.gz')
+            return outputs
+    else:   #cmp2.0+
+        def _list_outputs(self):
+            outputs = self._outputs().get()
+
+            outputs['white_matter_mask_file'] = op.abspath('fsmask_1mm.nii.gz')
+            #outputs['cc_unknown_file'] = op.abspath('cc_unknown.nii.gz')
+            #outputs['ribbon_file'] = op.abspath('ribbon.nii.gz')
+            #outputs['aseg_file'] = op.abspath('aseg.nii.gz')
+
+            #outputs['roi_files'] = self._gen_outfilenames('ROI_HR_th')
+            outputs['roi_files_in_structural_space'] = self._gen_outfilenames('ROIv_HR_th')
+
+            if self.inputs.erode_masks:
+                outputs['wm_eroded'] = op.abspath('wm_eroded.nii.gz')
+                outputs['csf_eroded'] = op.abspath('csf_eroded.nii.gz')
+                outputs['brain_eroded'] = op.abspath('brain_eroded.nii.gz')
+
+            return outputs
+
 
     if CMP_VERSION < 2:
         def _gen_outfilename(self, ext, prefix='ROI'):
@@ -671,6 +716,6 @@ class Parcellate(BaseInterface):
     else:
         def _gen_outfilenames(self, basename):
             filepaths = []
-            for scale in self.inputs.scales:
+            for scale in get_parcellation(self.inputs.parcellation_scheme).keys():
                 filepaths.append(op.abspath(op.join(scale,basename)))
             return filepaths
