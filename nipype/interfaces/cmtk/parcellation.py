@@ -529,6 +529,43 @@ R: the neighbourhood of the specified point in Z
 
     return R
 
+
+def erode_mask(maskFile):
+    # Define erosion mask
+    imerode = nd.binary_erosion
+    se = np.zeros( (3,3,3) )
+    se[1,:,1] = 1; se[:,1,1] = 1; se[1,1,:] = 1
+
+    # Erode mask
+    mask = ni.load( maskFile ).get_data().astype( np.uint32 )
+    er_mask = np.zeros( mask.shape )
+    idx = np.where( (mask == 1) )
+    er_mask[idx] = 1
+    er_mask = imerode(er_mask,se)
+    er_mask = imerode(er_mask,se)
+    img = ni.Nifti1Image(er_mask, ni.load( maskFile ).get_affine(), ni.load( maskFile ).get_header())
+    ni.save(img, op.abspath('%s_eroded.nii.gz' % os.path.splitext(op.splitext(op.basename(maskFile))[0])[0]))
+
+class Erode_inputspec(BaseInterfaceInputSpec):
+    in_file = File(exists=True)
+
+class Erode_outputspec(TraitedSpec):
+    out_file = File(exists=True)
+
+class Erode(BaseInterface):
+    input_spec = Erode_inputspec
+    output_spec = Erode_outputspec
+
+    def _run_interface(self, runtime):
+        erode_mask(self.inputs.in_file)
+        return runtime
+
+    def _list_outputs(self):
+        outputs = self._outputs().get()
+        outputs['out_file'] = op.abspath('%s_eroded.nii.gz' % os.path.splitext(op.splitext(op.basename(self.inputs.in_file))[0])[0])
+        return outputs
+
+
 if CMP_VERSION < 2:
 
     class ParcellateInputSpec(BaseInterfaceInputSpec):
