@@ -133,26 +133,29 @@ class StreamlineTrackInputSpec(CommandLineInputSpec):
                    'the base DWI are needed. For SD methods, the SH harmonic coefficients of the FOD are needed.')
 
     seed_xor = ['seed_file', 'seed_spec']
-    seed_file = File(exists=True, argstr='-seed %s', desc='seed file', xor=seed_xor)
-    seed_spec = traits.List(traits.Float, desc='seed specification in mm and radius (x y z r)', position=2,
+    seed_file = File(exists=True, argstr='-seed %s', mandatory=True, desc='seed file', xor=seed_xor)
+    seed_spec = traits.List(traits.Float, desc='seed specification in mm and radius (x y z r)', 
                             argstr='-seed %s', minlen=4, maxlen=4, sep=',', units='mm', xor=seed_xor)
 
     include_xor = ['include_file', 'include_spec']
     include_file = File(exists=True, argstr='-include %s', desc='inclusion file', xor=include_xor)
-    include_spec = traits.List(traits.Float, desc='inclusion specification in mm and radius (x y z r)', position=2,
+    include_spec = traits.List(traits.Float, desc='inclusion specification in mm and radius (x y z r)',
                                argstr='-include %s', minlen=4, maxlen=4, sep=',', units='mm', xor=include_xor)
 
     exclude_xor = ['exclude_file', 'exclude_spec']
     exclude_file = File(exists=True, argstr='-exclude %s', desc='exclusion file', xor=exclude_xor)
-    exclude_spec = traits.List(traits.Float, desc='exclusion specification in mm and radius (x y z r)', position=2,
+    exclude_spec = traits.List(traits.Float, desc='exclusion specification in mm and radius (x y z r)',
                                argstr='-exclude %s', minlen=4, maxlen=4, sep=',', units='mm', xor=exclude_xor)
 
     mask_xor = ['mask_file', 'mask_spec']
     mask_file = File(exists=True, argstr='-mask %s', desc='mask file. Only tracks within mask.', xor=mask_xor)
-    mask_spec = traits.List(traits.Float, desc='Mask specification in mm and radius (x y z r). Tracks will be terminated when they leave the ROI.', position=2,
+    mask_spec = traits.List(traits.Float, desc='Mask specification in mm and radius (x y z r). Tracks will be terminated when they leave the ROI.',
                             argstr='-mask %s', minlen=4, maxlen=4, sep=',', units='mm', xor=mask_xor)
 
-    inputmodel = traits.Enum('DT_STREAM', 'SD_PROB', 'SD_STREAM',
+    gradient_encoding_file = File(exists=True, argstr='-grad %s', mandatory=False,
+    desc='Gradient encoding, supplied as a 4xN text file with each line is in the format [ X Y Z b ], where [ X Y Z ] describe the direction of the applied gradient, and b gives the b-value in units (1000 s/mm^2). See FSL2MRTrix')
+
+    inputmodel = traits.Enum('DT_STREAM', 'DT_PROB', 'SD_PROB', 'SD_STREAM',
                              argstr='%s', desc='input model type', usedefault=True, position=-3)
 
     stop = traits.Bool(argstr='-stop', desc="stop track as soon as it enters any of the include regions.")
