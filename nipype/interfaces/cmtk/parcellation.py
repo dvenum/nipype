@@ -754,5 +754,5 @@ class Parcellate(BaseInterface):
         def _gen_outfilenames(self, basename):
             filepaths = []
             for scale in get_parcellation(self.inputs.parcellation_scheme).keys():
-                filepaths.append(op.abspath(op.join(scale,basename)))
+                filepaths.append(op.abspath(basename+'_'+scale+'.nii.gz'))
             return filepaths
